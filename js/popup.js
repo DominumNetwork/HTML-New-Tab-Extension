@@ -68,6 +68,7 @@ function setupFileUpload() {
         const reader = new FileReader();
         reader.onload = (e) => {
             const content = e.target.result;
+            // Preserve exact content - don't modify or parse it
             document.getElementById('htmlEditor').value = content;
             updateLineNumbers();
             
@@ -82,7 +83,8 @@ function setupFileUpload() {
             showStatus('Error reading file', 'error');
         };
         
-        reader.readAsText(file);
+        // Read as text with UTF-8 encoding to preserve content exactly
+        reader.readAsText(file, 'UTF-8');
     }
 }
 
@@ -95,7 +97,7 @@ function formatFileSize(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-// Split content into chunks
+// Split content into chunks - preserve exact content
 function splitIntoChunks(content) {
     const chunks = [];
     for (let i = 0; i < content.length; i += CHUNK_SIZE) {
@@ -104,9 +106,32 @@ function splitIntoChunks(content) {
     return chunks;
 }
 
-// Reconstruct content from chunks
+// Reconstruct content from chunks - preserve exact content
 function reconstructFromChunks(chunks) {
     return chunks.join('');
+}
+
+// Safely encode content to prevent corruption during storage
+function encodeForStorage(content) {
+    // Use base64 encoding to preserve exact content including special characters
+    try {
+        return btoa(unescape(encodeURIComponent(content)));
+    } catch (error) {
+        console.warn('Failed to encode content, using raw content:', error);
+        return content;
+    }
+}
+
+// Safely decode content from storage
+function decodeFromStorage(content) {
+    // Check if content is base64 encoded
+    try {
+        const decoded = decodeURIComponent(escape(atob(content)));
+        return decoded;
+    } catch (error) {
+        // If decoding fails, assume it's raw content (backward compatibility)
+        return content;
+    }
 }
 
 // Load saved HTML when popup opens
@@ -119,6 +144,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load saved content
     if (typeof chrome !== 'undefined' && chrome.storage) {
         chrome.storage.sync.get(null, function(result) {
+            let content = '';
+            
             // Check if we have chunked data
             if (result.customHtml_chunks) {
                 const chunks = [];
@@ -127,19 +154,21 @@ document.addEventListener('DOMContentLoaded', function() {
                         chunks.push(result[`customHtml_chunk_${i}`]);
                     }
                 }
-                const content = reconstructFromChunks(chunks);
-                editor.value = content;
-                updateLineNumbers();
+                const rawContent = reconstructFromChunks(chunks);
+                // Try to decode if it was encoded
+                content = result.customHtml_encoded ? decodeFromStorage(rawContent) : rawContent;
                 
                 // Show chunk info
                 if (result.customHtml_chunks > 1) {
                     showStatus(`Loaded content from ${result.customHtml_chunks} chunks`, 'success');
                 }
             } else if (result.customHtml) {
-                // Legacy single storage
-                editor.value = result.customHtml;
-                updateLineNumbers();
+                // Legacy single storage - try to decode if marked as encoded
+                content = result.customHtml_encoded ? decodeFromStorage(result.customHtml) : result.customHtml;
             }
+            
+            editor.value = content;
+            updateLineNumbers();
         });
     }
 
@@ -172,19 +201,30 @@ function saveHTML() {
         chrome.storage.sync.get(null, function(result) {
             const keysToRemove = [];
             
-            // Remove old chunks
+            // Remove old chunks and metadata
             if (result.customHtml_chunks) {
                 for (let i = 0; i < result.customHtml_chunks; i++) {
                     keysToRemove.push(`customHtml_chunk_${i}`);
                 }
             }
-            keysToRemove.push('customHtml_chunks', 'customHtml');
+            keysToRemove.push('customHtml_chunks', 'customHtml', 'customHtml_encoded');
             
             chrome.storage.sync.remove(keysToRemove, function() {
+                // Encode content to prevent corruption
+                const encodedContent = encodeForStorage(htmlContent);
+                const useEncoding = encodedContent !== htmlContent;
+                
                 // Now save the new content
-                if (htmlContent.length <= CHUNK_SIZE) {
+                if (encodedContent.length <= CHUNK_SIZE) {
                     // Small content, save directly
-                    chrome.storage.sync.set({customHtml: htmlContent}, function() {
+                    const dataToSave = {
+                        customHtml: encodedContent
+                    };
+                    if (useEncoding) {
+                        dataToSave.customHtml_encoded = true;
+                    }
+                    
+                    chrome.storage.sync.set(dataToSave, function() {
                         if (chrome.runtime.lastError) {
                             showStatus('Error saving: ' + chrome.runtime.lastError.message, 'error');
                         } else {
@@ -194,7 +234,7 @@ function saveHTML() {
                     });
                 } else {
                     // Large content, split into chunks
-                    const chunks = splitIntoChunks(htmlContent);
+                    const chunks = splitIntoChunks(encodedContent);
                     
                     if (chunks.length > MAX_CHUNKS) {
                         showStatus(`Content too large. Maximum ${MAX_CHUNKS} chunks allowed.`, 'error');
@@ -204,6 +244,10 @@ function saveHTML() {
                     const dataToSave = {
                         customHtml_chunks: chunks.length
                     };
+                    
+                    if (useEncoding) {
+                        dataToSave.customHtml_encoded = true;
+                    }
                     
                     chunks.forEach((chunk, index) => {
                         dataToSave[`customHtml_chunk_${index}`] = chunk;
@@ -235,7 +279,7 @@ function resetHTML() {
         
         if (typeof chrome !== 'undefined' && chrome.storage) {
             chrome.storage.sync.get(null, function(result) {
-                const keysToRemove = ['customHtml'];
+                const keysToRemove = ['customHtml', 'customHtml_encoded'];
                 
                 // Remove all chunks
                 if (result.customHtml_chunks) {
@@ -268,7 +312,8 @@ function exportHTML() {
         return;
     }
     
-    const blob = new Blob([htmlContent], { type: 'text/html' });
+    // Create blob with UTF-8 BOM to ensure proper encoding
+    const blob = new Blob(['\ufeff' + htmlContent], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
