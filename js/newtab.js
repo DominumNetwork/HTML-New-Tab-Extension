@@ -42,6 +42,182 @@ function decodeFromStorage(content) {
     }
 }
 
+// Add link handling to iframe to ensure links open in new tabs
+function addLinkHandling(iframe) {
+    try {
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+        
+        // Function to handle link clicks
+        function handleLinkClick(event) {
+            const target = event.target.closest('a');
+            if (target && target.href) {
+                event.preventDefault();
+                
+                // Open link in new tab/window
+                window.open(target.href, '_blank');
+            }
+        }
+        
+        // Function to handle form submissions (like search forms)
+        function handleFormSubmit(event) {
+            const form = event.target;
+            if (form.tagName === 'FORM') {
+                event.preventDefault();
+                
+                // Get form action and method
+                const action = form.action || window.location.href;
+                const method = form.method.toLowerCase() || 'get';
+                
+                if (method === 'get') {
+                    // Handle GET form submission (like search)
+                    const formData = new FormData(form);
+                    const params = new URLSearchParams(formData);
+                    const url = action + (action.includes('?') ? '&' : '?') + params.toString();
+                    window.open(url, '_blank');
+                } else {
+                    // For POST forms, just open the action URL
+                    window.open(action, '_blank');
+                }
+            }
+        }
+        
+        // Add event listeners to the iframe document
+        iframeDoc.addEventListener('click', handleLinkClick, true);
+        iframeDoc.addEventListener('submit', handleFormSubmit, true);
+        
+        // Also modify existing links to have target="_blank" as backup
+        const links = iframeDoc.querySelectorAll('a');
+        links.forEach(link => {
+            if (!link.target || link.target === '_self') {
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+            }
+        });
+        
+        // Handle dynamically added links
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                mutation.addedNodes.forEach(function(node) {
+                    if (node.nodeType === 1) { // Element node
+                        if (node.tagName === 'A') {
+                            if (!node.target || node.target === '_self') {
+                                node.target = '_blank';
+                                node.rel = 'noopener noreferrer';
+                            }
+                        } else {
+                            // Check for links within added elements
+                            const nestedLinks = node.querySelectorAll && node.querySelectorAll('a');
+                            if (nestedLinks) {
+                                nestedLinks.forEach(link => {
+                                    if (!link.target || link.target === '_self') {
+                                        link.target = '_blank';
+                                        link.rel = 'noopener noreferrer';
+                                    }
+                                });
+                            }
+                        }
+                    }
+                });
+            });
+        });
+        
+        observer.observe(iframeDoc.body, {
+            childList: true,
+            subtree: true
+        });
+        
+    } catch (error) {
+        console.error('Error setting up link handling:', error);
+    }
+}
+
+// Add link handling to fallback container
+function addLinkHandlingToContainer(container) {
+    try {
+        // Function to handle link clicks
+        function handleLinkClick(event) {
+            const target = event.target.closest('a');
+            if (target && target.href) {
+                event.preventDefault();
+                
+                // Open link in new tab/window
+                window.open(target.href, '_blank');
+            }
+        }
+        
+        // Function to handle form submissions
+        function handleFormSubmit(event) {
+            const form = event.target;
+            if (form.tagName === 'FORM') {
+                event.preventDefault();
+                
+                // Get form action and method
+                const action = form.action || window.location.href;
+                const method = form.method.toLowerCase() || 'get';
+                
+                if (method === 'get') {
+                    // Handle GET form submission (like search)
+                    const formData = new FormData(form);
+                    const params = new URLSearchParams(formData);
+                    const url = action + (action.includes('?') ? '&' : '?') + params.toString();
+                    window.open(url, '_blank');
+                } else {
+                    // For POST forms, just open the action URL
+                    window.open(action, '_blank');
+                }
+            }
+        }
+        
+        // Add event listeners to the container
+        container.addEventListener('click', handleLinkClick, true);
+        container.addEventListener('submit', handleFormSubmit, true);
+        
+        // Modify existing links to have target="_blank"
+        const links = container.querySelectorAll('a');
+        links.forEach(link => {
+            if (!link.target || link.target === '_self') {
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+            }
+        });
+        
+        // Handle dynamically added links
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                mutation.addedNodes.forEach(function(node) {
+                    if (node.nodeType === 1) { // Element node
+                        if (node.tagName === 'A') {
+                            if (!node.target || node.target === '_self') {
+                                node.target = '_blank';
+                                node.rel = 'noopener noreferrer';
+                            }
+                        } else {
+                            // Check for links within added elements
+                            const nestedLinks = node.querySelectorAll && node.querySelectorAll('a');
+                            if (nestedLinks) {
+                                nestedLinks.forEach(link => {
+                                    if (!link.target || link.target === '_self') {
+                                        link.target = '_blank';
+                                        link.rel = 'noopener noreferrer';
+                                    }
+                                });
+                            }
+                        }
+                    }
+                });
+            });
+        });
+        
+        observer.observe(container, {
+            childList: true,
+            subtree: true
+        });
+        
+    } catch (error) {
+        console.error('Error setting up container link handling:', error);
+    }
+}
+
 // Safely set HTML content to prevent corruption and style bleeding
 function setCustomContent(htmlContent) {
     const customContent = document.getElementById('custom-content');
@@ -73,6 +249,11 @@ function setCustomContent(htmlContent) {
             iframeDoc.open();
             iframeDoc.write(htmlContent);
             iframeDoc.close();
+            
+            // Add link handling to ensure links open in new tabs
+            iframe.onload = function() {
+                addLinkHandling(iframe);
+            };
             
             // Show custom content and hide default
             customContent.style.display = 'block';
@@ -217,6 +398,9 @@ function setCustomContentFallback(htmlContent, customContent, defaultContent) {
             newScript.textContent = oldScript.textContent;
             oldScript.parentNode.replaceChild(newScript, oldScript);
         });
+        
+        // Add link handling to the fallback container
+        addLinkHandlingToContainer(isolatedContainer);
         
     } catch (error) {
         console.error('Error in fallback content setting:', error);

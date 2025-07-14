@@ -87,8 +87,29 @@
 - Full viewport coverage for custom content
 
 **Files Modified**:
-- `js/newtab.js`: Complete rewrite of `setCustomContent()` with isolation
+- `js/newtab.js`: Complete rewrite of `setCustomContent()` with isolation and link handling
 - `newtab.html`: Updated CSS for custom content container positioning
+
+### 5. Link Navigation Fix in Isolated Content
+**Problem**: Links in custom HTML content were opening within the iframe or isolated container instead of opening in new tabs, breaking the user experience.
+
+**Root Cause**: When HTML content is isolated in an iframe or container, link clicks try to navigate within that isolated context instead of opening in the browser's main window.
+
+**Solution Implemented**:
+- Added comprehensive link interception for both iframe and fallback methods
+- Implemented click event handling to force links to open in new tabs
+- Added form submission handling for search functionality
+- Used MutationObserver to handle dynamically added links
+- Set `target="_blank"` and `rel="noopener noreferrer"` on all links as backup
+
+**Features Added**:
+- Automatic link click interception and redirection
+- Form submission handling (search boxes, etc.)
+- Dynamic link monitoring for SPA-style content
+- Proper security attributes for external links
+
+**Files Modified**:
+- `js/newtab.js`: Added `addLinkHandling()` and `addLinkHandlingToContainer()` functions
 
 ## Technical Improvements
 
@@ -135,7 +156,14 @@
    - Test complex layouts (flexbox, grid, absolute positioning)
    - Ensure scripts in custom content execute properly
 
-5. **Backward Compatibility**:
+5. **Link Navigation Testing**:
+   - Test clicking links in custom HTML content (should open in new tabs)
+   - Test search forms and form submissions (should open results in new tabs)
+   - Verify external links work properly (YouTube, GitHub, etc.)
+   - Test dynamically added links (JavaScript-generated content)
+   - Ensure proper security attributes on external links
+
+6. **Backward Compatibility**:
    - Existing saved content should load correctly
    - No data loss during upgrade
 
