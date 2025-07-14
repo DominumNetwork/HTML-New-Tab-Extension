@@ -30,13 +30,72 @@ function reconstructFromChunks(chunks) {
     return chunks.join('');
 }
 
+// Safely decode content from storage
+function decodeFromStorage(content) {
+    // Check if content is base64 encoded
+    try {
+        const decoded = decodeURIComponent(escape(atob(content)));
+        return decoded;
+    } catch (error) {
+        // If decoding fails, assume it's raw content (backward compatibility)
+        return content;
+    }
+}
+
+// Safely set HTML content to prevent corruption
+function setCustomContent(htmlContent) {
+    const customContent = document.getElementById('custom-content');
+    const defaultContent = document.getElementById('default-content');
+    
+    if (htmlContent && htmlContent.trim()) {
+        // Create a new document fragment to safely parse HTML
+        const parser = new DOMParser();
+        try {
+            // Parse the HTML content safely
+            const doc = parser.parseFromString(htmlContent, 'text/html');
+            
+            // Clear and set the content properly
+            customContent.innerHTML = '';
+            
+            // Copy all elements from the parsed document
+            if (doc.head && doc.head.children.length > 0) {
+                // Handle head elements (CSS, meta tags, etc.)
+                Array.from(doc.head.children).forEach(element => {
+                    if (element.tagName === 'STYLE' || element.tagName === 'LINK') {
+                        document.head.appendChild(element.cloneNode(true));
+                    }
+                });
+            }
+            
+            if (doc.body) {
+                // Use the body content or the entire document if no body tag
+                const contentToInsert = doc.body.innerHTML || htmlContent;
+                customContent.innerHTML = contentToInsert;
+            } else {
+                // Fallback: insert content directly but safely
+                customContent.textContent = '';
+                customContent.insertAdjacentHTML('afterbegin', htmlContent);
+            }
+            
+            customContent.style.display = 'block';
+            defaultContent.style.display = 'none';
+        } catch (error) {
+            console.error('Error parsing HTML content:', error);
+            // Fallback to safe text insertion
+            customContent.textContent = htmlContent;
+            customContent.style.display = 'block';
+            defaultContent.style.display = 'none';
+        }
+    } else {
+        customContent.style.display = 'none';
+        defaultContent.style.display = 'block';
+    }
+}
+
 // Load and display custom HTML content
 function loadCustomContent() {
     if (typeof chrome !== 'undefined' && chrome.storage) {
         chrome.storage.sync.get(null, function(result) {
-            const customContent = document.getElementById('custom-content');
-            const defaultContent = document.getElementById('default-content');
-            
             let htmlContent = '';
             
             // Check if we have chunked data
@@ -47,20 +106,15 @@ function loadCustomContent() {
                         chunks.push(result[`customHtml_chunk_${i}`]);
                     }
                 }
-                htmlContent = reconstructFromChunks(chunks);
+                const rawContent = reconstructFromChunks(chunks);
+                // Try to decode if it was encoded
+                htmlContent = result.customHtml_encoded ? decodeFromStorage(rawContent) : rawContent;
             } else if (result.customHtml) {
-                // Legacy single storage
-                htmlContent = result.customHtml;
+                // Legacy single storage - try to decode if marked as encoded
+                htmlContent = result.customHtml_encoded ? decodeFromStorage(result.customHtml) : result.customHtml;
             }
             
-            if (htmlContent && htmlContent.trim()) {
-                customContent.innerHTML = htmlContent;
-                customContent.style.display = 'block';
-                defaultContent.style.display = 'none';
-            } else {
-                customContent.style.display = 'none';
-                defaultContent.style.display = 'block';
-            }
+            setCustomContent(htmlContent);
         });
     } else {
         // Fallback if chrome API not available
@@ -68,9 +122,28 @@ function loadCustomContent() {
     }
 }
 
-function openSettings() {
-    if (typeof chrome !== 'undefined' && chrome.runtime) {
-        // Try to open the popup
+async function openSettings() {
+    if (typeof chrome !== 'undefined' && chrome.action) {
+        try {
+            // Try to open the extension popup (Manifest V3)
+            await chrome.action.openPopup();
+        } catch (error) {
+            // If openPopup fails (which it often does), send a message to background script
+            // to open the popup or fallback to options page
+            try {
+                chrome.runtime.sendMessage({action: 'openPopup'}, (response) => {
+                    if (chrome.runtime.lastError || !response || !response.success) {
+                        // Final fallback: open options page
+                        chrome.runtime.openOptionsPage();
+                    }
+                });
+            } catch (msgError) {
+                // Last resort: open options page
+                chrome.runtime.openOptionsPage();
+            }
+        }
+    } else if (typeof chrome !== 'undefined' && chrome.runtime) {
+        // Fallback for older manifest versions or limited context
         chrome.runtime.openOptionsPage();
     } else {
         // Fallback - try to open extension popup

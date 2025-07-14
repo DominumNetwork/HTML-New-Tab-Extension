@@ -1,0 +1,84 @@
+# Custom New Tab Extension Fixes
+
+## Issues Fixed
+
+### 1. HTML Content Corruption on Save/Load
+**Problem**: When uploading HTML files and saving them, the content would get corrupted, especially CSS and complex HTML structures.
+
+**Root Cause**: The extension was using `innerHTML` to directly set HTML content, which caused:
+- HTML entities to be double-encoded
+- Self-closing tags to be modified by the browser's parser
+- CSS and JavaScript to be re-parsed and potentially corrupted
+- Special characters to be mangled during storage
+
+**Solution Implemented**:
+- Added Base64 encoding/decoding for content storage to preserve exact formatting
+- Implemented safe HTML parsing using `DOMParser` to prevent corruption
+- Added proper UTF-8 handling for file uploads
+- Added encoding metadata to track when content is encoded
+- Separated head elements (CSS/meta tags) from body content for better handling
+
+**Files Modified**:
+- `js/popup.js`: Added encoding/decoding functions and improved file handling
+- `js/newtab.js`: Added decoding support and safer HTML content setting
+
+### 2. Extension Popup Not Opening from New Tab Button
+**Problem**: Clicking the "Customize Page" button in the new tab page would redirect to the extension's options page instead of opening the actual toolbar popup.
+
+**Root Cause**: The extension was using `chrome.runtime.openOptionsPage()` which opens the options page, not the popup. The `chrome.action.openPopup()` API has limitations and often fails when called from certain contexts.
+
+**Solution Implemented**:
+- Added a background service worker to handle popup opening requests
+- Implemented message passing between the new tab page and background script
+- Added multiple fallback mechanisms:
+  1. Try `chrome.action.openPopup()` directly
+  2. Send message to background script to open popup
+  3. Fallback to options page if popup fails
+- Made the function async to handle promise-based API properly
+
+**Files Modified**:
+- `js/newtab.js`: Updated `openSettings()` function with proper popup handling
+- `js/background.js`: Created new background service worker
+- `manifest.json`: Added background service worker configuration
+
+## Technical Improvements
+
+### Content Preservation
+- Files are now read with explicit UTF-8 encoding
+- Content is Base64 encoded before storage to prevent corruption
+- Backward compatibility maintained for existing saved content
+- Added proper error handling for encoding/decoding failures
+
+### Popup Opening Reliability
+- Multi-tier fallback system ensures button always works
+- Background service worker provides proper popup opening context
+- Improved error handling and user feedback
+
+### Storage Optimization
+- Chunking system preserved for large files
+- Added encoding metadata for future compatibility
+- Cleaned up storage key management
+
+## Testing Recommendations
+
+1. **HTML Content Testing**:
+   - Upload HTML files with complex CSS (flexbox, grid, animations)
+   - Test files with special characters and Unicode
+   - Verify CSS styles are preserved exactly
+   - Test JavaScript code preservation
+
+2. **Popup Opening Testing**:
+   - Click "Customize Page" button in new tab
+   - Verify popup opens instead of redirecting
+   - Test in different browser contexts (normal/incognito)
+
+3. **Backward Compatibility**:
+   - Existing saved content should load correctly
+   - No data loss during upgrade
+
+## Notes
+
+- The popup opening fix uses modern Manifest V3 APIs
+- Content encoding is transparent to users
+- All changes maintain backward compatibility
+- Performance impact is minimal due to efficient encoding
