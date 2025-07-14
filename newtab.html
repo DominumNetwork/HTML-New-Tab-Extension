@@ -177,14 +177,14 @@
             align-items: center;
             gap: 15px;
         }
-        
+
         .button-options {
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
             justify-content: center;
         }
-        
+
         .option-button {
             background: rgba(255, 255, 255, 0.2);
             border: 1px solid rgba(255, 255, 255, 0.3);
@@ -202,13 +202,13 @@
             gap: 8px;
             animation: fadeInUp 1s ease-out 1.1s both;
         }
-        
+
         .option-button:hover {
             background: rgba(255, 255, 255, 0.3);
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
         }
-        
+
         .option-button:active {
             transform: translateY(0);
         }
@@ -218,6 +218,11 @@
             height: 100vh;
             display: none;
             animation: fadeIn 0.8s ease-out;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 999999;
+            background: white;
         }
 
         @keyframes fadeIn {
