@@ -42,53 +42,194 @@ function decodeFromStorage(content) {
     }
 }
 
-// Safely set HTML content to prevent corruption
+// Safely set HTML content to prevent corruption and style bleeding
 function setCustomContent(htmlContent) {
     const customContent = document.getElementById('custom-content');
     const defaultContent = document.getElementById('default-content');
     
     if (htmlContent && htmlContent.trim()) {
-        // Create a new document fragment to safely parse HTML
-        const parser = new DOMParser();
         try {
-            // Parse the HTML content safely
-            const doc = parser.parseFromString(htmlContent, 'text/html');
+            // Create an isolated iframe for the custom content
+            const iframe = document.createElement('iframe');
+            iframe.style.cssText = `
+                width: 100%;
+                height: 100vh;
+                border: none;
+                margin: 0;
+                padding: 0;
+                overflow: hidden;
+                position: absolute;
+                top: 0;
+                left: 0;
+                z-index: 999999;
+            `;
             
-            // Clear and set the content properly
+            // Clear the custom content container
             customContent.innerHTML = '';
+            customContent.appendChild(iframe);
             
-            // Copy all elements from the parsed document
-            if (doc.head && doc.head.children.length > 0) {
-                // Handle head elements (CSS, meta tags, etc.)
-                Array.from(doc.head.children).forEach(element => {
-                    if (element.tagName === 'STYLE' || element.tagName === 'LINK') {
-                        document.head.appendChild(element.cloneNode(true));
-                    }
-                });
-            }
+            // Write the custom HTML content to the iframe
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            iframeDoc.open();
+            iframeDoc.write(htmlContent);
+            iframeDoc.close();
             
-            if (doc.body) {
-                // Use the body content or the entire document if no body tag
-                const contentToInsert = doc.body.innerHTML || htmlContent;
-                customContent.innerHTML = contentToInsert;
-            } else {
-                // Fallback: insert content directly but safely
-                customContent.textContent = '';
-                customContent.insertAdjacentHTML('afterbegin', htmlContent);
-            }
-            
+            // Show custom content and hide default
             customContent.style.display = 'block';
+            customContent.style.position = 'fixed';
+            customContent.style.top = '0';
+            customContent.style.left = '0';
+            customContent.style.width = '100%';
+            customContent.style.height = '100vh';
+            customContent.style.zIndex = '999999';
+            customContent.style.background = 'white';
+            
             defaultContent.style.display = 'none';
+            
+            // Hide the body overflow to prevent scrollbars
+            document.body.style.overflow = 'hidden';
+            
         } catch (error) {
-            console.error('Error parsing HTML content:', error);
-            // Fallback to safe text insertion
-            customContent.textContent = htmlContent;
-            customContent.style.display = 'block';
-            defaultContent.style.display = 'none';
+            console.error('Error setting custom content in iframe:', error);
+            // Fallback: Use isolated div with CSS reset
+            setCustomContentFallback(htmlContent, customContent, defaultContent);
         }
     } else {
+        // Reset everything back to default
         customContent.style.display = 'none';
+        customContent.style.position = 'static';
+        customContent.style.zIndex = 'auto';
         defaultContent.style.display = 'block';
+        document.body.style.overflow = 'auto';
+    }
+}
+
+// Fallback method with CSS isolation
+function setCustomContentFallback(htmlContent, customContent, defaultContent) {
+    try {
+        // Parse the HTML content safely
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlContent, 'text/html');
+        
+        // Create an isolated container
+        const isolatedContainer = document.createElement('div');
+        isolatedContainer.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            z-index: 999999;
+            background: white;
+            overflow: auto;
+            font-family: inherit;
+            font-size: 16px;
+            line-height: 1.4;
+            color: #333;
+        `;
+        
+        // Add CSS reset specifically for the isolated container
+        const resetStyle = document.createElement('style');
+        resetStyle.textContent = `
+            .custom-html-container * {
+                box-sizing: border-box;
+            }
+            .custom-html-container {
+                all: initial;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: 100vh !important;
+                z-index: 999999 !important;
+                background: white !important;
+                overflow: auto !important;
+            }
+        `;
+        
+        isolatedContainer.className = 'custom-html-container';
+        
+        // Process and insert head elements (CSS, meta tags)
+        if (doc.head && doc.head.children.length > 0) {
+            Array.from(doc.head.children).forEach(element => {
+                if (element.tagName === 'STYLE') {
+                    // Scope the CSS to the isolated container
+                    const scopedStyle = document.createElement('style');
+                    let css = element.textContent;
+                    
+                    // Add container scoping to CSS rules
+                    css = css.replace(/([^{}]+)\{/g, '.custom-html-container $1{');
+                    
+                    // Fix body and html selectors
+                    css = css.replace(/\.custom-html-container\s+body\s*\{/g, '.custom-html-container {');
+                    css = css.replace(/\.custom-html-container\s+html\s*\{/g, '.custom-html-container {');
+                    css = css.replace(/\.custom-html-container\s+\*\s*\{/g, '.custom-html-container * {');
+                    
+                    scopedStyle.textContent = css;
+                    isolatedContainer.appendChild(scopedStyle);
+                } else if (element.tagName === 'LINK' && element.rel === 'stylesheet') {
+                    // Copy external stylesheets
+                    isolatedContainer.appendChild(element.cloneNode(true));
+                } else if (element.tagName === 'META') {
+                    // Skip meta tags for the isolated container
+                    return;
+                }
+            });
+        }
+        
+        // Insert the reset style first
+        isolatedContainer.appendChild(resetStyle);
+        
+        // Insert body content
+        if (doc.body) {
+            const bodyContent = document.createElement('div');
+            bodyContent.innerHTML = doc.body.innerHTML;
+            isolatedContainer.appendChild(bodyContent);
+            
+            // Copy body attributes to container
+            if (doc.body.style.cssText) {
+                const bodyStyles = doc.body.style.cssText;
+                isolatedContainer.style.cssText += '; ' + bodyStyles;
+            }
+        } else {
+            // If no body tag, insert all content
+            const contentDiv = document.createElement('div');
+            contentDiv.innerHTML = htmlContent;
+            isolatedContainer.appendChild(contentDiv);
+        }
+        
+        // Clear and set up the custom content
+        customContent.innerHTML = '';
+        customContent.appendChild(isolatedContainer);
+        
+        customContent.style.display = 'block';
+        defaultContent.style.display = 'none';
+        document.body.style.overflow = 'hidden';
+        
+        // Execute any scripts in the custom content
+        const scripts = isolatedContainer.querySelectorAll('script');
+        scripts.forEach(oldScript => {
+            const newScript = document.createElement('script');
+            Array.from(oldScript.attributes).forEach(attr => {
+                newScript.setAttribute(attr.name, attr.value);
+            });
+            newScript.textContent = oldScript.textContent;
+            oldScript.parentNode.replaceChild(newScript, oldScript);
+        });
+        
+    } catch (error) {
+        console.error('Error in fallback content setting:', error);
+        // Last resort: simple text display
+        customContent.innerHTML = `
+            <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100vh; 
+                        background: white; padding: 20px; overflow: auto; z-index: 999999;">
+                <h2>Custom HTML Content</h2>
+                <pre style="white-space: pre-wrap; font-family: monospace; font-size: 12px;">${htmlContent}</pre>
+            </div>
+        `;
+        customContent.style.display = 'block';
+        defaultContent.style.display = 'none';
     }
 }
 

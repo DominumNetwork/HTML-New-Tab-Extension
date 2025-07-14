@@ -67,6 +67,29 @@
 - `newtab.html`: Added upload button and improved button group layout
 - `manifest.json`: Added `activeTab` permission for tab operations
 
+### 4. HTML Content Style Isolation
+**Problem**: Custom HTML content with global CSS styles (like `* { margin: 0; }` and `body` styles) was bleeding into the main new tab page, causing layout issues and elements to shift to the side.
+
+**Root Cause**: The custom HTML content was being inserted directly into the page DOM, causing CSS conflicts between the custom content's styles and the extension's default styles.
+
+**Solution Implemented**:
+- Added iframe-based isolation as the primary method for complete style separation
+- Created a fallback system with CSS scoping and isolation containers
+- Implemented proper CSS reset and scoping for custom content
+- Added automatic script re-execution in isolated containers
+- Fixed positioning to ensure custom content fills the entire viewport
+
+**Features Added**:
+- Iframe isolation for complete style separation
+- CSS scoping fallback for browsers with iframe restrictions
+- Automatic style conflict resolution
+- Proper script handling in isolated content
+- Full viewport coverage for custom content
+
+**Files Modified**:
+- `js/newtab.js`: Complete rewrite of `setCustomContent()` with isolation
+- `newtab.html`: Updated CSS for custom content container positioning
+
 ## Technical Improvements
 
 ### Content Preservation
@@ -105,7 +128,14 @@
    - Verify tab mode toggle button (📄) works from popup
    - Ensure uploaded files preserve formatting exactly
 
-4. **Backward Compatibility**:
+4. **Style Isolation Testing**:
+   - Test HTML files with global CSS resets (`* { margin: 0; }`)
+   - Test content with `body` and `html` styles
+   - Verify custom content fills entire viewport without affecting default UI
+   - Test complex layouts (flexbox, grid, absolute positioning)
+   - Ensure scripts in custom content execute properly
+
+5. **Backward Compatibility**:
    - Existing saved content should load correctly
    - No data loss during upgrade
 
