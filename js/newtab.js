@@ -151,6 +151,18 @@ async function openSettings() {
     }
 }
 
+// Open settings in tab mode (for file uploads)
+function openSettingsInTab() {
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
+        chrome.tabs.create({ 
+            url: chrome.runtime.getURL('popup.html?popup=false')
+        });
+    } else {
+        // Fallback
+        chrome.runtime.openOptionsPage();
+    }
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     createParticles();
@@ -158,8 +170,9 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(updateClock, 1000);
     loadCustomContent();
     
-    // Add event listener to customize button
+    // Add event listeners to buttons
     document.getElementById('customizeBtn').addEventListener('click', openSettings);
+    document.getElementById('uploadBtn').addEventListener('click', openSettingsInTab);
 });
 
 // Listen for storage changes - listen to all storage changes

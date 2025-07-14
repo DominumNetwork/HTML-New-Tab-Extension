@@ -2,6 +2,23 @@
 const CHUNK_SIZE = 7000; // Leave some buffer for metadata
 const MAX_CHUNKS = 50; // Reasonable limit to prevent excessive storage usage
 
+// Check if running in popup or tab mode
+function isInPopup() {
+    return window.location.search.indexOf('popup=false') === -1 && 
+           window.innerWidth < 500 && 
+           window.innerHeight < 700;
+}
+
+// Open extension in tab mode
+function openInTab() {
+    const currentUrl = window.location.href;
+    const tabUrl = currentUrl + (currentUrl.includes('?') ? '&' : '?') + 'popup=false';
+    chrome.tabs.create({ url: tabUrl });
+    if (isInPopup()) {
+        window.close();
+    }
+}
+
 // Update line numbers
 function updateLineNumbers() {
     const editor = document.getElementById('htmlEditor');
@@ -22,9 +39,14 @@ function setupFileUpload() {
     const uploadContainer = document.getElementById('uploadContainer');
     const fileInfo = document.getElementById('fileInfo');
 
-    // Click handler
-    uploadContainer.addEventListener('click', () => {
-        fileInput.click();
+    // Click handler with popup detection
+    uploadContainer.addEventListener('click', (e) => {
+        if (isInPopup()) {
+            // Show modal asking user if they want to open in tab
+            showTabModeDialog();
+        } else {
+            fileInput.click();
+        }
     });
 
     // Drag and drop handlers
@@ -40,6 +62,12 @@ function setupFileUpload() {
     uploadContainer.addEventListener('drop', (e) => {
         e.preventDefault();
         uploadContainer.classList.remove('dragover');
+        
+        if (isInPopup()) {
+            // Show modal asking user if they want to open in tab
+            showTabModeDialog();
+            return;
+        }
         
         const files = e.dataTransfer.files;
         if (files.length > 0) {
@@ -86,6 +114,34 @@ function setupFileUpload() {
         // Read as text with UTF-8 encoding to preserve content exactly
         reader.readAsText(file, 'UTF-8');
     }
+}
+
+// Show dialog asking user to open in tab mode
+function showTabModeDialog() {
+    const dialog = document.createElement('div');
+    dialog.className = 'tab-mode-dialog';
+    dialog.innerHTML = `
+        <div class="dialog-overlay">
+            <div class="dialog-content">
+                <h3>Upload File</h3>
+                <p>To upload files, the extension needs to open in a tab to prevent the popup from closing.</p>
+                <div class="dialog-buttons">
+                    <button id="openInTabBtn" class="btn-primary">Open in Tab</button>
+                    <button id="cancelDialogBtn" class="btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(dialog);
+    
+    document.getElementById('openInTabBtn').addEventListener('click', () => {
+        openInTab();
+    });
+    
+    document.getElementById('cancelDialogBtn').addEventListener('click', () => {
+        document.body.removeChild(dialog);
+    });
 }
 
 // Format file size
@@ -138,6 +194,14 @@ function decodeFromStorage(content) {
 document.addEventListener('DOMContentLoaded', function() {
     const editor = document.getElementById('htmlEditor');
     
+    // Add tab mode toggle if in popup
+    if (isInPopup()) {
+        addTabModeButton();
+    } else {
+        // Adjust styles for tab mode
+        document.body.classList.add('tab-mode');
+    }
+    
     // Setup file upload
     setupFileUpload();
     
@@ -187,6 +251,17 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('previewBtn').addEventListener('click', openNewTab);
     document.getElementById('exportBtn').addEventListener('click', exportHTML);
 });
+
+// Add button to open in tab mode
+function addTabModeButton() {
+    const header = document.querySelector('.header h1');
+    const tabButton = document.createElement('button');
+    tabButton.className = 'tab-mode-btn';
+    tabButton.innerHTML = '📄';
+    tabButton.title = 'Open in Tab';
+    tabButton.addEventListener('click', openInTab);
+    header.appendChild(tabButton);
+}
 
 function saveHTML() {
     const htmlContent = document.getElementById('htmlEditor').value;

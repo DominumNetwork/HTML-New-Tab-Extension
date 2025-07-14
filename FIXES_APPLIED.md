@@ -41,6 +41,32 @@
 - `js/background.js`: Created new background service worker
 - `manifest.json`: Added background service worker configuration
 
+### 3. Popup Closes During File Upload
+**Problem**: When trying to upload HTML files through the popup, the popup would close when the file dialog opened, preventing users from completing the upload process.
+
+**Root Cause**: Browser extension popups automatically close when they lose focus, which happens when file dialogs open or when users click outside the popup.
+
+**Solution Implemented**:
+- Added detection for popup vs tab mode based on window dimensions and URL parameters
+- Created a modal dialog that appears when users try to upload in popup mode
+- Added "Upload File" button in new tab page that opens extension in tab mode directly
+- Implemented tab mode with larger interface and better file handling
+- Added automatic tab opening when file operations are detected in popup mode
+
+**Features Added**:
+- Tab mode toggle button (📄) in popup header
+- Dedicated "📁 Upload File" button in new tab page
+- Modal dialog explaining why tab mode is needed for uploads
+- Responsive tab mode interface with larger editor
+- Seamless transition between popup and tab modes
+
+**Files Modified**:
+- `js/popup.js`: Added popup detection, tab mode functions, and upload dialog
+- `js/newtab.js`: Added `openSettingsInTab()` function and upload button
+- `popup.html`: Added CSS styles for dialog, tab mode, and button layouts
+- `newtab.html`: Added upload button and improved button group layout
+- `manifest.json`: Added `activeTab` permission for tab operations
+
 ## Technical Improvements
 
 ### Content Preservation
@@ -72,7 +98,14 @@
    - Verify popup opens instead of redirecting
    - Test in different browser contexts (normal/incognito)
 
-3. **Backward Compatibility**:
+3. **File Upload Testing**:
+   - Try uploading files through popup (should show dialog)
+   - Click "📁 Upload File" from new tab (should open in tab)
+   - Test drag-and-drop in both popup and tab modes
+   - Verify tab mode toggle button (📄) works from popup
+   - Ensure uploaded files preserve formatting exactly
+
+4. **Backward Compatibility**:
    - Existing saved content should load correctly
    - No data loss during upgrade
 
