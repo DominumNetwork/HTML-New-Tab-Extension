@@ -5,7 +5,8 @@
   "description": "Customize your new tab page with HTML code",
   "permissions": [
     "storage",
-    "tabs"
+    "tabs",
+    "activeTab"
   ],
   "background": {
     "service_worker": "js/background.js"
